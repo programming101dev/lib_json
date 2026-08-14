@@ -1,0 +1,13 @@
+# lib_json is a foundational parser used below lib_env and lib_c. Calling the
+# instrumented wrappers here would create a dependency cycle, so this file
+# records its complete reviewed libc I/O, allocation, and string boundary.
+src/json.c		c:@F@free
+src/json.c		c:@F@malloc
+src/json.c		c:@F@memcpy
+src/json.c		c:@F@strlen
+src/json.c		c:@F@strncmp
+src/json.c		c:@F@strtoull
+src/json.c		c:@F@fputc
+src/json.c		c:@F@fputs
+src/json.c		c:@F@fprintf
+src/json.c		c:@F@realloc

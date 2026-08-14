@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <limits.h>
 #include <p101_json/json.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -11,7 +12,8 @@ enum
     JSON_CONTROL_BYTE_LIMIT     = 0x20U,
     JSON_UNICODE_HEX_DIGITS     = 4,
     JSON_HEXADECIMAL_BASE       = 16,
-    JSON_DECIMAL_BASE           = 10
+    JSON_DECIMAL_BASE           = 10,
+    JSON_SIZE_TEXT_CAPACITY     = (sizeof(size_t) * CHAR_BIT) + 1U
 };
 
 static const size_t JSON_NO_PARENT = SIZE_MAX;
@@ -112,7 +114,8 @@ void p101_json_destroy(struct p101_json *document)
 
 bool p101_json_parse(struct p101_error *err, const char *text, size_t length, struct p101_json *document)
 {
-    bool parsed;
+    void *allocation;
+    bool  parsed;
 
     if(document == NULL)
     {
@@ -127,7 +130,8 @@ bool p101_json_parse(struct p101_error *err, const char *text, size_t length, st
         parsed = false;
         goto done;
     }
-    document->text = (char *)malloc(length + 1U);
+    allocation     = malloc(length + 1U);
+    document->text = (char *)allocation;
     if(document->text == NULL)
     {
         P101_ERROR_RAISE_ERRNO(err, ENOMEM);
@@ -233,11 +237,9 @@ done:
 
 bool p101_json_token_size(const struct p101_json *document, size_t token_index, size_t *value)
 {
-    char               text[64];
-    char              *end;
-    unsigned long long parsed;
-    bool               copied;
-    bool               valid;
+    char text[JSON_SIZE_TEXT_CAPACITY];
+    bool copied;
+    bool valid;
 
     copied = false;
     if(token_index < document->token_count && document->tokens[token_index].kind == P101_JSON_PRIMITIVE)
@@ -255,8 +257,11 @@ bool p101_json_token_size(const struct p101_json *document, size_t token_index, 
     valid = false;
     if(copied)
     {
+        char              *end;
+        unsigned long long parsed;
+
         errno  = 0;
-        parsed = strtoull(text, &end, 10);
+        parsed = strtoull(text, &end, JSON_DECIMAL_BASE);
         valid  = errno == 0 && end != text && *end == '\0' && parsed <= SIZE_MAX;
         if(valid)
         {
@@ -521,6 +526,7 @@ done:
 static bool json_add_token(struct p101_error *err, struct p101_json *document, enum p101_json_kind kind, size_t start, size_t parent, size_t *token_index)
 {
     struct p101_json_token *tokens;
+    void                   *allocation;
     size_t                  capacity;
     bool                    added;
 
@@ -533,7 +539,8 @@ static bool json_add_token(struct p101_error *err, struct p101_json *document, e
             P101_ERROR_RAISE_ERRNO(err, EOVERFLOW);
             goto done;
         }
-        tokens = (struct p101_json_token *)realloc(document->tokens, capacity * sizeof(*document->tokens));
+        allocation = realloc(document->tokens, capacity * sizeof(*document->tokens));
+        tokens     = (struct p101_json_token *)allocation;
         if(tokens == NULL)
         {
             P101_ERROR_RAISE_ERRNO(err, ENOMEM);
@@ -565,12 +572,10 @@ static bool json_parse(struct p101_error *err, struct p101_json *document)
     size_t parent;
     size_t token_index;
     size_t cursor;
-    char   character;
     bool   escaped;
     bool   added;
     bool   delimiter;
     bool   error_clear;
-    bool   space;
     bool   parsed;
 
     parent = JSON_NO_PARENT;
@@ -578,6 +583,9 @@ static bool json_parse(struct p101_error *err, struct p101_json *document)
     cursor = 0U;
     while(cursor < document->text_size && parsed)
     {
+        char character;
+        bool space;
+
         character = document->text[cursor];
         space     = json_is_space(character);
         if(space)
