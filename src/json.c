@@ -53,9 +53,8 @@ static int test_write_should_fail(void)
 
 static int test_fprintf(FILE *stream, const char *format, ...)
 {
-    int     result;
-    int     should_fail;
-    va_list arguments;
+    int result;
+    int should_fail;
 
     should_fail = test_write_should_fail();
     if(should_fail != 0)
@@ -64,6 +63,8 @@ static int test_fprintf(FILE *stream, const char *format, ...)
     }
     else
     {
+        va_list arguments;
+
         va_start(arguments, format);
         result = vfprintf(stream, format, arguments);
         va_end(arguments);
